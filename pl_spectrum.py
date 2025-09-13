@@ -32,7 +32,8 @@ class ReadFiles:
 
       atomic_positions = [lines[i].strip().split() for i in range(8,8+tot)]
       atomic_positions = np.array(atomic_positions).astype(float)
-      atomic_positions[atomic_positions > 0.99] -= 1
+      if lattice_type == "Direct":
+        atomic_positions[atomic_positions > 0.99] -= 1
       atoms = dict(zip(atomic_species, number_of_atoms))
 
       return (np.dot(atomic_positions, lattice_vectors), atoms) if lattice_type == "Direct" else (atomic_positions, atoms)
@@ -296,6 +297,7 @@ class Photoluminescence(ReadFiles):
 
     Ek: Normal mode phonon energies.
     """
+    self.sigma = sigma
     if Lorentz == False:
       S_E = np.array([np.dot(Sk,self.Gaussian(i,Ek,sigma)) for i in E_meV_positive])
     else:
@@ -311,7 +313,7 @@ class Photoluminescence(ReadFiles):
     S_t_exact = np.array([np.dot(Sk,np.exp(-1j*Ek*i)) for i in t_meV])
     return t_meV, S_t, S_t_exact
 
-  def GeneratingFunction(self, Sk, S_t, t_meV, Ek, T):
+  def GeneratingFunction(self, Sk, S_t, t_meV, Ek, E_meV_positive, T):
 
     """
     Calculates the generating function G(t).
@@ -321,7 +323,10 @@ class Photoluminescence(ReadFiles):
     else:
       Kb = 8.61733326e-2 # Boltzmann constant in meV/k
       nk = 1/((np.exp(Ek/(Kb*T))) - 1)
-      G_t = np.exp((S_t) - (np.sum(Sk)) + np.sum(nk*Sk*np.exp(1j*Ek*t_meV)) + np.sum(nk*Sk*np.exp(-1j*Ek*t_meV)) - 2*np.sum(nk*Sk))
+      C_E = np.array([np.dot(nk*Sk,self.Gaussian(i,Ek,self.sigma)) for i in E_meV_positive])
+      C_t = self.Fourier(E_meV_positive, C_E)[1]
+      C_t_inv = self.InverseFourier(E_meV_positive, C_E)[1]
+      G_t = np.exp((S_t) - (np.sum(Sk)) + C_t + C_t_inv - 2*np.sum(nk*Sk))
     return G_t
 
   def OpticalSpectralFunction(self, G_t, t_meV, zpl, gamma):
@@ -356,14 +361,14 @@ class Photoluminescence(ReadFiles):
 
 
 def CalculateSpectrum(
-  path_structure_gs = os.path.expanduser("/Users/uqmsin17/Desktop/PlSpectra_Mridul_15July25/data/CBVN/structure/CONTCAR_GS"),  # Path to ground state structure
-  path_structure_es = os.path.expanduser("/Users/uqmsin17/Desktop/PlSpectra_Mridul_15July25/data/CBVN/structure/CONTCAR_ES"),  # Path to excited state structure
+  path_structure_gs = os.path.expanduser("./CONTCAR_GS"),  # Path to ground state structure
+  path_structure_es = os.path.expanduser("./CONTCAR_ES"),  # Path to excited state structure
   phonons_source = "Phonopy",  # Options: "VASP" or "Phonopy"
-  path_phonon_band = os.path.expanduser("/Users/uqmsin17/Desktop/PlSpectra_Mridul_15July25/data/CBVN/phonon_bands/band.yaml"),  # Path to phonon band data
+  path_phonon_band = os.path.expanduser("./band.yaml"),  # Path to phonon band data
   temperature = 0, # Temperature
-  zpl = 1951,  # Zero Phonon Line (meV)           NV-1945, CBVN-1951
+  zpl = 3395,  # Zero Phonon Line (meV)           3405, algo-3395
   tmax = 2000,  # Upper time limit (fs)
-  gamma = 2,  # Gamma value (meV)
+  gamma = 4,  # Gamma value (meV)
   forces = None #(os.path.expanduser("~/Documents/UQ/Photoluminescence/Data_Carla/data/CBVN/forces_in_gs_geometry/OUTCAR_ES_0"), os.path.expanduser("~/Documents/UQ/Photoluminescence/Data_Carla/data/CBVN/forces_in_gs_geometry/OUTCAR_GS_0")),  # Options: None or tuple (ES file path, GS file path)
 ):
 
@@ -405,7 +410,7 @@ def CalculateSpectrum(
 
     t_meV, S_t, S_t_exact = pl.FourierSpectralFunction(Sk, Ek, S_E, E_meV_positive)
 
-    G_t = pl.GeneratingFunction(Sk, S_t, t_meV, Ek, temperature)
+    G_t = pl.GeneratingFunction(Sk, S_t, t_meV, Ek, E_meV_positive, temperature)
 
 
     E_meV, A_E = pl.OpticalSpectralFunction(G_t, t_meV, zpl, gamma)
@@ -472,10 +477,12 @@ def Results():
   # plt.xlim(1700, 2000)
   plt.show()
 
+
   plt.scatter(Ek, IPR, s = 5, marker = "s")
   plt.title(f"Inverse Participation Ratio")
   plt.xlabel("Phonon Energy (meV)")
   plt.ylabel("IPR")
   plt.show()
+  return (E_meV, L_E)
 
-Results()
+E_meV, L_E = Results()
