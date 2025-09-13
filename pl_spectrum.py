@@ -32,11 +32,18 @@ class ReadFiles:
 
       atomic_positions = [lines[i].strip().split() for i in range(8,8+tot)]
       atomic_positions = np.array(atomic_positions).astype(float)
-      if lattice_type == "Direct":
-        atomic_positions[atomic_positions > 0.99] -= 1
       atoms = dict(zip(atomic_species, number_of_atoms))
+      
+      if lattice_type != "Direct":
+        latticeInv = np.linalg.inv(lattice_vectors.T)
+        Rd = np.array([np.dot(latticeInv,vec) for vec in atomic_positions])
+        atomic_positions = Rd
 
-      return (np.dot(atomic_positions, lattice_vectors), atoms) if lattice_type == "Direct" else (atomic_positions, atoms)
+      atomic_positions[atomic_positions > 0.99] -= 1
+      atomic_positions = np.dot(atomic_positions, lattice_vectors)
+      return (atomic_positions, atoms)
+      
+      
 
   def ReadPhononsPhonopy(self, path):
 
@@ -359,17 +366,16 @@ class Photoluminescence(ReadFiles):
   
 
 
-
 def CalculateSpectrum(
   path_structure_gs = os.path.expanduser("./CONTCAR_GS"),  # Path to ground state structure
-  path_structure_es = os.path.expanduser("./CONTCAR_ES"),  # Path to excited state structure
+  path_structure_es = os.path.expanduser("./POSCAR100"),  # Path to excited state structure
   phonons_source = "Phonopy",  # Options: "VASP" or "Phonopy"
   path_phonon_band = os.path.expanduser("./band.yaml"),  # Path to phonon band data
   temperature = 0, # Temperature
-  zpl = 3395,  # Zero Phonon Line (meV)           3405, algo-3395
+  zpl = 3339,  # Zero Phonon Line (meV)           3405, algo-3395
   tmax = 2000,  # Upper time limit (fs)
-  gamma = 4,  # Gamma value (meV)
-  forces = None #(os.path.expanduser("~/Documents/UQ/Photoluminescence/Data_Carla/data/CBVN/forces_in_gs_geometry/OUTCAR_ES_0"), os.path.expanduser("~/Documents/UQ/Photoluminescence/Data_Carla/data/CBVN/forces_in_gs_geometry/OUTCAR_GS_0")),  # Options: None or tuple (ES file path, GS file path)
+  gamma = 10,  # Gamma value (meV)
+  forces = None #(os.path.expanduser("./OUTCAR_T"), os.path.expanduser("./OUTCAR_GS")),  # Options: None or tuple (ES file path, GS file path)
 ):
 
     """
@@ -392,7 +398,7 @@ def CalculateSpectrum(
     Ek[Ek == 0] = 0.00001
 
     if forces != None:
-      F_es = pl.ReadForces(forces[0])
+      F_es = np.loadtxt("./forces/FORCES1") #pl.ReadForces(forces[0])
       F_gs = pl.ReadForces(forces[1])
       qk = pl.ConfigCoordinatesF(masses, F_es, F_gs, modes, Ek)
     else:
@@ -426,63 +432,73 @@ def CalculateSpectrum(
     IPR = pl.InverseParticipationRatio(modes)
 
 
-    return (qk, (Ek, Sk), (E_meV_positive, S_E), (t_fs, S_t, S_t_exact), (G_t), (E_meV, A_E), (L_E), IPR)
+
+    """
+    Analyses of results.
+    """
+    plt.scatter(Ek, Sk, s = 5, marker = "s")
+    plt.title(f"Total HR factor = {np.sum(Sk)}")
+    plt.xlabel("Phonon Energy (meV)")
+    plt.ylabel("$S_k$")
+    plt.show()
+
+    S_E = S_E[E_meV_positive <= (max(Ek) + 36)]
+    E_meV_positive = E_meV_positive[E_meV_positive <= (max(Ek) + 36)]
+    S_t = S_t[(t_fs >= 0) & (t_fs <= 550)]
+    S_t_exact = S_t_exact[(t_fs >= 0) & (t_fs <= 550)]
+    G_t = G_t[(t_fs >= 0) & (t_fs <= 550)]
+    t_fs = t_fs[(t_fs >= 0) & (t_fs <= 550)]
 
 
-def Results():
+    plt.plot(E_meV_positive, S_E)
+    plt.xlabel("Phonon Energy (meV)")
+    plt.ylabel("S(E)")
+    plt.show()
 
-  """
-  Analyses of results.
-  """
-
-  (qk, (Ek, Sk), (E_meV_positive, S_E), (t_fs, S_t, S_t_exact), (G_t), (E_meV, A_E), (L_E), IPR) = CalculateSpectrum()
-
-  plt.scatter(Ek, Sk, s = 5, marker = "s")
-  plt.title(f"Total HR factor = {np.sum(Sk)}")
-  plt.xlabel("Phonon Energy (meV)")
-  plt.ylabel("$S_k$")
-  plt.show()
-
-  S_E = S_E[E_meV_positive <= (max(Ek) + 36)]
-  E_meV_positive = E_meV_positive[E_meV_positive <= (max(Ek) + 36)]
-  S_t = S_t[(t_fs >= 0) & (t_fs <= 550)]
-  S_t_exact = S_t_exact[(t_fs >= 0) & (t_fs <= 550)]
-  G_t = G_t[(t_fs >= 0) & (t_fs <= 550)]
-  t_fs = t_fs[(t_fs >= 0) & (t_fs <= 550)]
+    plt.plot(t_fs, np.real(S_t), label = "Real", color = "red")
+    plt.plot(t_fs, np.imag(S_t), label = "Imaginary", color = "blue")
+    plt.legend()
+    plt.xlabel("Time (fs)")
+    plt.ylabel("S(t)")
+    plt.show()
 
 
-  plt.plot(E_meV_positive, S_E)
-  plt.xlabel("Phonon Energy (meV)")
-  plt.ylabel("S(E)")
-  plt.show()
+    plt.plot(t_fs, np.real(G_t), label = "Real", color = "red")
+    plt.plot(t_fs, np.imag(G_t), label = "Imaginary", color = "blue")
+    plt.legend()
+    plt.xlabel("Time (fs)")
+    plt.ylabel("G(t)")
+    plt.show()
 
-  plt.plot(t_fs, np.real(S_t), label = "Real", color = "red")
-  plt.plot(t_fs, np.imag(S_t), label = "Imaginary", color = "blue")
-  plt.legend()
-  plt.xlabel("Time (fs)")
-  plt.ylabel("S(t)")
-  plt.show()
-
-
-  plt.plot(t_fs, np.real(G_t), label = "Real", color = "red")
-  plt.plot(t_fs, np.imag(G_t), label = "Imaginary", color = "blue")
-  plt.legend()
-  plt.xlabel("Time (fs)")
-  plt.ylabel("G(t)")
-  plt.show()
-
-  plt.plot(E_meV, np.abs(L_E))
-  plt.xlabel("Photon Energy (meV)")
-  plt.ylabel("PL")
-  # plt.xlim(1700, 2000)
-  plt.show()
+    plt.plot(E_meV, np.log(np.abs(L_E)))
+    plt.xlabel("Photon Energy (meV)")
+    plt.ylabel("PL")
+    # plt.xlim(1700, 2000)
+    plt.show()
 
 
-  plt.scatter(Ek, IPR, s = 5, marker = "s")
-  plt.title(f"Inverse Participation Ratio")
-  plt.xlabel("Phonon Energy (meV)")
-  plt.ylabel("IPR")
-  plt.show()
-  return (E_meV, L_E)
+    plt.scatter(Ek, IPR, s = 5, marker = "s")
+    plt.title(f"Inverse Participation Ratio")
+    plt.xlabel("Phonon Energy (meV)")
+    plt.ylabel("IPR")
+    plt.show()
 
-E_meV, L_E = Results()
+    return (R_gs, R_es, qk, (Ek, Sk), (E_meV_positive, S_E), (t_fs, S_t, S_t_exact), (G_t), (E_meV, A_E), (L_E), IPR)
+
+
+(R_gs, R_es, qk, (Ek, Sk), (E_meV_positive, S_E), (t_fs, S_t, S_t_exact), (G_t), (E_meV, A_E), (L_E), IPR) = CalculateSpectrum(
+  path_structure_gs = os.path.expanduser("./CONTCAR_GS"),  # Path to ground state structure
+  path_structure_es = os.path.expanduser("./POSCAR100"),  # Path to excited state structure
+  phonons_source = "Phonopy",  # Options: "VASP" or "Phonopy"
+  path_phonon_band = os.path.expanduser("./band.yaml"),  # Path to phonon band data
+  temperature = 0, # Temperature
+  zpl = 2000,  # Zero Phonon Line (meV)           3405, algo-3395
+  tmax = 2000,  # Upper time limit (fs)
+  gamma = 10,  # Gamma value (meV)
+  forces = None #(os.path.expanduser("./OUTCAR_T"), os.path.expanduser("./OUTCAR_GS")),  # Options: None or tuple (ES file path, GS file path)
+)
+
+
+
+
+
