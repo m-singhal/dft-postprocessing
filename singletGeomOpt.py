@@ -121,7 +121,7 @@ for iter in range(1,totIter+1):
     elif status == "Converged":
         print("Convergence Achieved, excited state geometry obtained.")
         break
-    elif iter == totIter - 1:
+    elif iter == totIter:
         print("Maximum iterations reached without convergence.")
         break
 
