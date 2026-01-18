@@ -374,7 +374,8 @@ def CalculateSpectrum(
   temperature = 0, # Temperature
   zpl = 3339,  # Zero Phonon Line (meV)           3405, algo-3395
   tmax = 2000,  # Upper time limit (fs)
-  gamma = 10,  # Gamma value (meV)
+  gamma = 10,  # Gamma value (meV) - ZPL broadening
+  sigma = 6, # Sigma value (meV) - Phonon sideband broadening
   forces = None #(os.path.expanduser("./OUTCAR_T"), os.path.expanduser("./OUTCAR_GS")),  # Options: None or tuple (ES file path, GS file path)
 ):
 
@@ -392,6 +393,7 @@ def CalculateSpectrum(
       modes = modes[:int(modes.shape[0]/2),...]
     else:
       masses, freqs, modes = pl.ReadPhononsVasp(path_phonon_band, atoms_es)
+    
 
     freqs[freqs < 0.1] = 0.0
     Ek = pl.FreqToEnergy(freqs)
@@ -412,7 +414,7 @@ def CalculateSpectrum(
       Emax = 5000
     tmax_meV = pl.TimeScaling(tmax)
     E_meV_positive = pl.IV(0, Emax, tmax_meV)
-    S_E = pl.SpectralFunction(Sk, Ek, E_meV_positive)
+    S_E = pl.SpectralFunction(Sk, Ek, E_meV_positive, sigma)
 
     t_meV, S_t, S_t_exact = pl.FourierSpectralFunction(Sk, Ek, S_E, E_meV_positive)
 
@@ -470,7 +472,7 @@ def CalculateSpectrum(
     plt.ylabel("G(t)")
     plt.show()
 
-    plt.plot(E_meV, np.log(np.abs(L_E)))
+    plt.plot(E_meV, np.abs(L_E))
     plt.xlabel("Photon Energy (meV)")
     plt.ylabel("PL")
     # plt.xlim(1700, 2000)
@@ -483,22 +485,17 @@ def CalculateSpectrum(
     plt.ylabel("IPR")
     plt.show()
 
-    return (R_gs, R_es, qk, (Ek, Sk), (E_meV_positive, S_E), (t_fs, S_t, S_t_exact), (G_t), (E_meV, A_E), (L_E), IPR)
+    return (R_gs, R_es, qk, modes, masses, (Ek, Sk), (E_meV_positive, S_E), (t_fs, S_t, S_t_exact), (G_t), (E_meV, A_E), (L_E), IPR)
 
-
-(R_gs, R_es, qk, (Ek, Sk), (E_meV_positive, S_E), (t_fs, S_t, S_t_exact), (G_t), (E_meV, A_E), (L_E), IPR) = CalculateSpectrum(
-  path_structure_gs = os.path.expanduser("./CONTCAR_GS"),  # Path to ground state structure
-  path_structure_es = os.path.expanduser("./POSCAR100"),  # Path to excited state structure
-  phonons_source = "Phonopy",  # Options: "VASP" or "Phonopy"
-  path_phonon_band = os.path.expanduser("./band.yaml"),  # Path to phonon band data
+(R_gs, R_es, qk, modes, masses, (Ek, Sk), (E_meV_positive, S_E), (t_fs, S_t, S_t_exact), (G_t), (E, A_E), (l_ref), IPR) = CalculateSpectrum(
+  path_structure_gs = os.path.expanduser("./contcar_gs_ref"),  # Path to ground state structure
+  path_structure_es = os.path.expanduser("./contcar_es_ref"),  # Path to excited state structure
+  phonons_source = "VASP",  # Options: "VASP" or "Phonopy"
+  path_phonon_band = os.path.expanduser("./outcar_ph_ref"),  # Path to phonon band data
   temperature = 0, # Temperature
-  zpl = 2000,  # Zero Phonon Line (meV)           3405, algo-3395
+  zpl = 4143,  # Zero Phonon Line (meV)           3405, algo-3395
   tmax = 2000,  # Upper time limit (fs)
-  gamma = 10,  # Gamma value (meV)
+  gamma = 6,  # Gamma value (meV) - ZPL broadening
+  sigma = 4, # Sigma value (meV) - Phonon sideband broadening
   forces = None #(os.path.expanduser("./OUTCAR_T"), os.path.expanduser("./OUTCAR_GS")),  # Options: None or tuple (ES file path, GS file path)
 )
-
-
-
-
-
