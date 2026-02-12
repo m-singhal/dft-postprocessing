@@ -74,6 +74,7 @@ path = "/scratch/pawsey1141/uqmsin17/cbcn_defect/rBN/bulk/pbe/defect/es/true_rel
 pathGS = "/scratch/pawsey1141/uqmsin17/cbcn_defect/rBN/bulk/pbe/defect/gs/scf"
 status = "NA"
 totIter = 150
+os.makedirs(f"{path}/poscar", exist_ok=True)
 shutil.copyfile(
     f"{path}/singlet/POSCAR",
     f"{path}/poscar/POSCAR0"
@@ -110,6 +111,7 @@ for iter in range(1,totIter+1):
     f"{path}/poscar/POSCAR{iter}"
 )
 
+    os.makedirs(f"{path}/forces", exist_ok=True)
     np.savetxt(f"{path}/forces/FORCES{iter}", fS)
 
     print(f"Iteration={iter} | Status={status} | MaximumForce={maxForce}")
